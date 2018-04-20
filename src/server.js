@@ -2,6 +2,8 @@ import express from 'express';
 import { graphqlExpress, graphiqlExpress } from 'apollo-server-express';
 import bodyParser from 'body-parser';
 
+import './binding-scratch'
+
 import * as Schema from './schema';
 
 const PORT = 3000;

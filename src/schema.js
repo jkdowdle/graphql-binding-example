@@ -1,52 +1,117 @@
-// Welcome to Launchpad!
-// Log in to edit and save pads, run queries in GraphiQL on the right.
-// Click "Download" above to get a zip with a standalone Node.js server.
-// See docs and examples at https://github.com/apollographql/awesome-launchpad
+import { makeExecutableSchema, SchemaDirectiveVisitor } from 'graphql-tools'
+import { Binding } from 'graphql-binding'
 
-// graphql-tools combines a schema string with resolvers.
-import { makeExecutableSchema } from 'graphql-tools';
-
-// Construct a schema, using GraphQL schema language
-const typeDefs = `
-  type Query {
-    hello: String
+const vegitables = [
+  {
+    id: 'a',
+    name: 'Carrot'
+  },
+  {
+    id: 'b',
+    name: 'Cellary'
   }
-`;
+]
 
-// Provide resolver functions for your schema fields
+const fruits = [
+  {
+    id: 'c',
+    name: 'Apple'
+  },
+  {
+    id: 'd',
+    name: 'Orange'
+  }
+]
+
+const db = { vegitables, fruits }
+
+class VegitableModel {
+  constructor() {
+    this.ready = true
+  }
+  find() {
+    return db.vegitables
+  }
+
+  findOne() {
+    return db.vegitables[0]
+  }
+}
+
+class FruitModel {
+  constructor() {
+    this.ready = true
+  }
+  find() {
+    return db.fruit
+  }
+
+  findOne() {
+    return db.fruit[0]
+  }
+}
+
+const models = { vegitables: new VegitableModel(), fruits: new FruitModel() }
+
+console.log('VM', new VegitableModel())
+
+class DbDirevtive extends SchemaDirectiveVisitor {
+  visitFieldDefinition(field) {
+    const { topic, request } = this.args
+    // console.log('running', models)
+    field.resolve = () => models[topic][request]
+
+  }
+}
+
+const typeDefs = `
+  directive @db(topic: String, request: String) on FIELD_DEFINITION
+
+  type Query {
+    fruits: [Fruit] @db(topic: "fruits", request: "find")
+    vegitables: [Vegitable] @db(topic: "vegitables", request: "find")
+
+    fruit: Fruit @db(topic: "fruits", request: "findOne")
+    vegitable: Vegitable @db(topic: "vegitables", request: "findOne")
+  }
+
+  type Fruit {
+    id: ID
+    name: String
+  }
+
+  type Vegitable {
+    id: ID
+    name: String
+  }
+`
+
 const resolvers = {
   Query: {
-    hello: (root, args, context) => {
-      return 'Hello world!';
+    fruits: () => {
+      console.log('yo yo yo')
+      return db.fruits
     },
-  },
-};
+    vegitables: () => {
+      console.log('no no no')
+      return db.vegitables
+    }
+  }
+}
 
-// Required: Export the GraphQL.js schema object as "schema"
 export const schema = makeExecutableSchema({
   typeDefs,
   resolvers,
-});
+  schemaDirectives: {
+    db: DbDirevtive
+  }
+})
 
-// Optional: Export a function to get context from the request. It accepts two
-// parameters - headers (lowercased http headers) and secrets (secrets defined
-// in secrets section). It must return an object (or a promise resolving to it).
+export const binding = new Binding({ schema })
+
 export function context(headers, secrets) {
   return {
     headers,
-    secrets,
-  };
-};
-
-// Optional: Export a root value to be passed during execution
-// export const rootValue = {};
-
-// Optional: Export a root function, that returns root to be passed
-// during execution, accepting headers and secrets. It can return a
-// promise. rootFunction takes precedence over rootValue.
-// export function rootFunction(headers, secrets) {
-//   return {
-//     headers,
-//     secrets,
-//   };
-// };
+    secrets
+  }
+}
