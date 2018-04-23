@@ -9,8 +9,6 @@ import * as Schema from './schema';
 const PORT = 3000;
 const server = express();
 
-
-
 const schemaFunction =
   Schema.schemaFunction ||
   function() {
@@ -39,7 +37,7 @@ server.use('/graphql', bodyParser.json(), graphqlExpress(async (request) => {
   }
   const context = await contextFunction(request.headers, process.env);
   const rootValue = await rootFunction(request.headers, process.env);
-
+  // console.log('context ---', context.models)
   return {
     schema: await schema,
     rootValue,
