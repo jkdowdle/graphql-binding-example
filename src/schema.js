@@ -1,7 +1,7 @@
 import { makeExecutableSchema, SchemaDirectiveVisitor } from 'graphql-tools'
 import { Binding } from 'graphql-binding'
 
-const vegitables = [
+const vegitable = [
 	{
 		id: 'a',
 		name: 'Carrot'
@@ -12,7 +12,7 @@ const vegitables = [
 	}
 ]
 
-const fruits = [
+const fruit = [
 	{
 		id: 'c',
 		name: 'Apple'
@@ -23,81 +23,65 @@ const fruits = [
 	}
 ]
 
-const db = { vegitables, fruits }
+const db = { vegitable, fruit }
 
 const findById = (id) => (item) => id === item.id
 
-class VegitableModel {
-	find() {
-		return db.vegitables
-	}
-
-	findOne({ id }) {
-		return db.vegitables.find(findById(id))
-	}
-
-	create(args) {
+const operations = {
+	find: (type) => () => db[type],
+	findOne: (type) => ({ id }) => db[type].find(findById(id)),
+	create: (type) => (args) => {
 		const id = String(Math.random())
-		const vegi = { ...args, id }
-		db.vegitables.push(vegi)
-		return vegi
+		const item = { ...args, id }
+		db[type] = [
+			...db[type],
+			item
+		]
+		return item
+	},
+	update: (type) => ({ data, where: { id } }) => {
+		const indexOfItem = db[type].findIndex(findById(id))
+		const item = { ...db[type][indexOfItem], ...data }
+
+		db[type] = [
+			...db[type].slice(0, indexOfItem),
+			item,
+			...db[type].slice(indexOfItem + 1)
+		]
+		return item
+	},
+	remove: (type) => ({ where: { id } }) => {
+		const indexOfItem = db[type].findIndex(findById(id))
+		const item = db[type][indexOfItem]
+
+		db[type] = [
+			...db[type].slice(0, indexOfItem),
+			...db[type].slice(indexOfItem + 1)
+		]
+		return item
 	}
 }
-
-class FruitModel {
-	find() {
-		return db.fruits
-	}
-
-	findOne({ id }) {
-		return db.fruits.find(findById(id))
-	}
-
-	create(args) {
-		const id = String(Math.random())
-		const fruit = { ...args, id }
-		db.fruits.push(fruit)
-		return fruit
-	}
-
-	update({ data, where: { id } }) {
-		const indexOfFruit = db.fruits.findIndex((item) => item.id === id)
-		const fruit = { ...db.fruits[indexOfFruit], ...data }
-
-		db.fruits = [
-			...db.fruits.splice(0, indexOfFruit),
-			fruit,
-			...db.fruits.splice(indexOfFruit + 1)
-    ]
-		return fruit
-	}
-}
-
-const models = { vegitable: new VegitableModel(), fruit: new FruitModel() }
 
 class DbDirevtive extends SchemaDirectiveVisitor {
-	visitSchema(schema) {
-		// console.log('\n\n LOLOLOLO visitSchema args', schema)
-	}
-	visitInputObject(...args) {
-		// console.log('\n\n inputobj', this)
-	}
 	visitFieldDefinition(field) {
-		const [ model, method ] = this.args.call.split('.')
+		// Determine from schema directive what type and operation
+		const [ type, method ] = this.args.call.split('.')
+
+		// Select the method. example: operations.create
+		const operation = operations[method]
+
+		// Pass in the type operation should be performed on
+		const operationOnType = operation(type)
 
 		field.resolve = (root, args, context) => {
-			return models[model][method](args)
+			// Pass on arguments to operation
+			return operationOnType(args)
 		}
 	}
 }
 
 const typeDefs = `
-  directive @db(call: String) on FIELD_DEFINITION | INPUT_OBJECT | SCHEMA
-
-  schema @db {
-    query: Query
-    mutation: Mutation
-  }
+  directive @db(call: String) on FIELD_DEFINITION
 
   type Query {
     fruits: [Fruit] @db(call: "fruit.find")
@@ -109,18 +93,17 @@ const typeDefs = `
 
   type Mutation {
     createFruit(name: String): Fruit @db(call: "fruit.create")
-    updateFruit(data: FruitDataInput!, where: FruitWhereUniqueInput!): Fruit @db(call: "fruit.update")
+		updateFruit(data: FruitDataInput!, where: FruitWhereUniqueInput!): Fruit @db(call: "fruit.update")
+		removeFruit(where: FruitWhereUniqueInput): Fruit @db(call: "fruit.remove")
 
-    createVegitable(name: String): Vegitable @db(call: "vegitable.create")
+		createVegitable(name: String): Vegitable @db(call: "vegitable.create")
+		updateVegitable(data: VegitableDataInput!, where: VegitableWhereUniqueInput!): Vegitable @db(call: "vegitable.update")
+		removeVegitable(where: VegitableWhereUniqueInput): Vegitable @db(call: "vegitable.remove")
   }
 
   type Fruit {
     id: ID
     name: String
-  }
-
-  input FruitInput {
-    id: ID
   }
 
   input FruitDataInput {
@@ -134,36 +117,32 @@ const typeDefs = `
   type Vegitable {
     id: ID
     name: String
+	}
+
+	input VegitableDataInput {
+    name: String
+  }
+
+  input VegitableWhereUniqueInput {
+    id: ID
   }
 `
 
 const resolvers = {
 	Query: {
-		// fruits: () => {
-		//   console.log('yo yo yo')
-		//   return db.fruits
-		// },
-		// vegitables: () => {
-		//   console.log('no no no')
-		//   return db.vegitables
-		// }
-		// fruit: (_, args) => {
-		//   console.log('RESOLVER')
-		//   console.log('args', args)
-		//   return models.vegitables.findOne()}
+
+	},
+	Mutation: {
+
 	}
 }
 
 export const schema = makeExecutableSchema({
 	typeDefs,
-	resolvers
-	// schemaDirectives: {
-	// 	db: DbDirevtive
-	// }
-})
-
-SchemaDirectiveVisitor.visitSchemaDirectives(schema, {
-	db: DbDirevtive
+	resolvers,
+	schemaDirectives: {
+		db: DbDirevtive
+	}
 })
 
 export const binding = new Binding({ schema })
